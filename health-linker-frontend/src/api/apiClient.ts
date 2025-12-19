@@ -1,7 +1,7 @@
  import axios from "axios";
 
  const apiCLient = axios.create({
-    baseURL: import.meta.env.VITE_API_URL || "http://localhost:5000/api",
+    baseURL: import.meta.env.VITE_API_URL || "https://link-health.onrender.com/api",
     timeout: 5000,
    //  headers: {
    //      'Content-Type': 'application/json'
