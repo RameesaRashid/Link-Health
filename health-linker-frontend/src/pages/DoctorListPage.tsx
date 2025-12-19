@@ -33,6 +33,7 @@ const DoctorListPage: React.FC<DoctorListPageProps> = ({ onDoctorSelect }) => {
         const response = await apiClient.get(
           `/doctors?name=${searchQuery}&specialty=${selectedSpecialty}&page=${currentPage}&limit=10`
         );
+        console.log("response",response)
         setDoctors(response.data.doctors);
         setTotalPages(response.data.totalPages);
       } catch (error) {

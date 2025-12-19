@@ -1,6 +1,7 @@
 import express, { type Application, type Response, type Request } from 'express';
 import dotenv from 'dotenv';
 import cors from "cors";
+dotenv.config();
 
 if(process.env.MONGO_URI){
     console.log("MONGO_URI is already set. Proceeding");
@@ -10,7 +11,6 @@ if(process.env.MONGO_URI){
     
 }
 
-dotenv.config();
 
 if (process.env.MONGO_URI) {
     console.log("SUCCESS: MONGO_URI loaded after dotenv call.");

@@ -1,81 +1,130 @@
-import mongoose from "mongoose";
-import { addDays, startOfDay, addMinutes, format } from "date-fns";
-import dotenv from "dotenv";
-import Doctor from "./models/doctorModel.js";
+import type { Request, Response } from "express";
+import Doctor from "../back-end/models/doctorModel.js"
 import Slot from "./models/slotModel.js";
 
-dotenv.config();
+import {
+  addMinutes,
+  startOfDay,
+  getDay,
+  addDays,
+} from "date-fns";
 
-const seedSlotsForExistingDoctors = async () => {
-  try {
-    await mongoose.connect(process.env.MONGO_URI!);
-    console.log("Connected to DB...");
-    
-    const doctors = await Doctor.find({ status: "approved" });
-    console.log(`Generating slots for ${doctors.length} doctors...`);
+import {type AuthRequest } from "./types/custom.js";
+import { type IWorkingHour } from "./models/doctorModel.js";
 
-    const allSlots = [];
-    const startDate = startOfDay(new Date());
-    const daysToGenerate = 7;
-
-    for (const doctor of doctors) {
-      for (let i = 0; i < daysToGenerate; i++) {
-        const currentDate = addDays(startDate, i);
-        const dayName = format(currentDate, "EEEE"); 
-
-        const schedule = doctor.workingHours.find((wh) => wh.day === dayName);
-
-        if (schedule) {
-          const [startHour = 0, startMinute = 0] = schedule.startTime
-            .split(":")
-            .map(Number);
-          const [endHour = 0, endMinute = 0] = schedule.endTime
-            .split(":")
-            .map(Number);
-
-          let slotStartTime = new Date(currentDate);
-          slotStartTime.setHours(startHour, startMinute, 0, 0);
-
-          const scheduleEndTime = new Date(currentDate);
-          scheduleEndTime.setHours(endHour, endMinute, 0, 0);
-
-          while (
-            addMinutes(slotStartTime, doctor.slotDuration) <= scheduleEndTime
-          ) {
-            const slotEndTime = addMinutes(slotStartTime, doctor.slotDuration);
-
-            allSlots.push({
-              doctorId: doctor._id,
-              startTime: new Date(slotStartTime),
-              endTime: new Date(slotEndTime),
-              date: startOfDay(slotStartTime),
-              isBooked: false,
-            });
-
-            slotStartTime = slotEndTime;
-
-            // prevent memory overflow
-            if (allSlots.length >= 5000) {
-              await Slot.insertMany(allSlots);
-              allSlots.length = 0; 
-              console.log("Inserted batch of 5000 slots...");
-            }
-          }
-        }
-      }
-    }
-
-    // Insert remaining slots
-    if (allSlots.length > 0) {
-      await Slot.insertMany(allSlots);
-    }
-
-    console.log("Successfully generated slots for all doctors!");
-    process.exit();
-  } catch (error) {
-    console.error("Seeding failed:", error);
-    process.exit(1);
-  }
+const dayIndexToName: { [key: number]: string } = {
+  0: "Sunday",
+  1: "Monday",
+  2: "Tuesday",
+  3: "Wednesday",
+  4: "Thursday",
+  5: "Friday",
+  6: "Saturday",
 };
 
-seedSlotsForExistingDoctors();
+interface GenerateSlotsRequest extends AuthRequest {
+  body: {
+    startDate: string;
+    endDate: string;
+  };
+}
+
+export const generateAvailableSlots = async (
+  req: GenerateSlotsRequest,
+  res: Response
+): Promise<Response> => {
+  try {
+    const userId = req.user?.userId;
+
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const { startDate, endDate } = req.body;
+
+    if (!startDate || !endDate) {
+      return res.status(400).json({ message: "startDate and endDate are required" });
+    }
+
+    const startDateObj = new Date(startDate);
+    const endDateObj = new Date(endDate);
+
+    if (isNaN(startDateObj.getTime()) || isNaN(endDateObj.getTime())) {
+      return res.status(400).json({ message: "Invalid date format. Use YYYY-MM-DD" });
+    }
+
+    const start = startOfDay(startDateObj);
+    const end = startOfDay(endDateObj);
+
+    const doctor = await Doctor.findOne({ userId, status: "approved" });
+
+    if (!doctor) {
+      return res.status(403).json({ message: "Doctor profile not approved or not found" });
+    }
+
+    if (!doctor.workingHours?.length) {
+      return res.status(400).json({ message: "Doctor working hours not set" });
+    }
+
+    await Slot.deleteMany({
+      doctorId: doctor._id,
+      date: { $gte: start, $lt: addDays(end, 1) },
+      isBooked: false,
+    });
+
+    const newSlots: any[] = [];
+    let currentDate = start;
+
+    while (currentDate <= end) {
+      const dayName = dayIndexToName[getDay(currentDate)];
+
+      const schedule = doctor.workingHours.find(
+        (wh: IWorkingHour) => wh.day.toLowerCase() === dayName?.toLowerCase()
+      );
+
+      if (schedule) {
+        // ✅ Fix: Use destructuring with fallbacks to ensure type is 'number'
+        const startParts = schedule.startTime.split(":").map(Number);
+        const endParts = schedule.endTime.split(":").map(Number);
+        
+        const startHour = startParts[0] ?? 0;
+        const startMinute = startParts[1] ?? 0;
+        const endHour = endParts[0] ?? 0;
+        const endMinute = endParts[1] ?? 0;
+
+        let slotStart = new Date(currentDate);
+        slotStart.setHours(startHour, startMinute, 0, 0);
+
+        const scheduleEnd = new Date(currentDate);
+        scheduleEnd.setHours(endHour, endMinute, 0, 0);
+
+        while (addMinutes(slotStart, doctor.slotDuration) <= scheduleEnd) {
+          const slotEnd = addMinutes(slotStart, doctor.slotDuration);
+
+          newSlots.push({
+            doctorId: doctor._id,
+            startTime: new Date(slotStart),
+            endTime: new Date(slotEnd),
+            date: startOfDay(slotStart),
+            isBooked: false,
+          });
+
+          slotStart = slotEnd;
+        }
+      }
+      currentDate = addDays(currentDate, 1);
+    }
+
+    if (newSlots.length > 0) {
+      await Slot.insertMany(newSlots);
+    }
+
+    return res.status(200).json({
+      message: "Slots generated successfully",
+      totalSlots: newSlots.length,
+    });
+  } catch (error) {
+    console.error("Generate Slot Error:", error);
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+};

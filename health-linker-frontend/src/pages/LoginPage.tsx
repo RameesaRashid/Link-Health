@@ -37,7 +37,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
   };
 
   const handleGoogleSuccess = async (credentialResponse: CredentialResponse) => {
-    // 🟢 Safety check: Ensure the credential exists before sending to backend
+    
     if (!credentialResponse.credential) {
       setMessage("Google did not provide login credentials.");
       return;
@@ -51,13 +51,13 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
 
       const { user, token } = res.data;
       
-      // 🟢 Log the user in with the data returned from your backend
+      
       login(user, token); 
       onLoginSuccess();
       console.log("Google Social Login Successful!");
     } catch (err) {
       console.error("Backend Google Auth Error:", err);
-      // 🟢 Provide a more descriptive error if the server is down
+      
       if (isAxiosError(err) && !err.response) {
         setMessage("Server is unreachable. Check if backend is running.");
       } else {
