@@ -34,7 +34,13 @@ const PORT: string | undefined = process.env.PORT || '5000';
 connectDB();
 
 // middlewares
-app.use(cors());
+app.use(cors({
+  origin: [
+    "http://localhost:5173", 
+    "https://link-health-frontend.vercel.app" 
+  ],
+  credentials: true
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
