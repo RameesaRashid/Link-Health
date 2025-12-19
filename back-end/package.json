@@ -8,7 +8,7 @@
   "main": "app.js",
   "scripts": {
     "start": "node dist/app.js",
-    "dev": "nodemon app.ts",
+    "dev": "nodemon --exec node --loader ts-node/esm index.ts",
     "build": "tsc"
   },
   "dependencies": {
