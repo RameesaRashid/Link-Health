@@ -7,8 +7,9 @@
   "type": "module",
   "main": "app.js",
   "scripts": {
-    "start": "node --loader ts-node/esm app.ts",
-    "dev": "nodemon --exec \"node --loader ts-node/esm\" app.ts"
+    "start": "node dist/app.ts",
+    "dev": "nodemon app.ts",
+    "build": "tsc"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
